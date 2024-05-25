@@ -31,6 +31,10 @@ endif()
 # etdump, bundled_program.
 find_package(executorch CONFIG REQUIRED)
 target_compile_options(executorch INTERFACE -DET_EVENT_TRACER_ENABLED)
+
+# For some reason android build is not able to find where gflags is and hence
+# cannot find corresponding .cmake file
+set(gflags_DIR ${CMAKE_CURRENT_BINARY_DIR}/../../third-party/gflags)
 find_package(gflags REQUIRED)
 
 set(_common_compile_options -Wno-deprecated-declarations -fPIC)
