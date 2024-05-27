@@ -79,8 +79,6 @@ def get_default_8bit_qnn_ptq_config(act_symmetric: bool = False) -> Quantization
 
     act_quantization_spec = QuantizationSpec(
         dtype=torch.uint8,
-        quant_min=torch.iinfo(torch.uint8).min,
-        quant_max=torch.iinfo(torch.uint8).max + 1,
         qscheme=(
             torch.per_tensor_symmetric if act_symmetric else torch.per_tensor_affine
         ),
@@ -170,7 +168,7 @@ def get_16a8w_qnn_ptq_config(
     weight_quantization_spec = QuantizationSpec(
         dtype=torch.uint8,
         quant_min=torch.iinfo(torch.uint8).min,
-        quant_max=torch.iinfo(torch.uint8).max + 1,
+        quant_max=torch.iinfo(torch.uint8).max,
         qscheme=torch.per_tensor_symmetric,
         ch_axis=0,
         observer_or_fake_quant_ctr=MinMaxObserver.with_args(**extra_args),
