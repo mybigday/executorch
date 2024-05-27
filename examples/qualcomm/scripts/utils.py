@@ -68,6 +68,8 @@ class SimpleADB:
             "SM8550": "73",
             "SM8475": "69",
             "SM8450": "69",
+            "SC8280X": "68",
+            "SC8380XP": "73",
         }
         self.soc_model = arch_table[soc_model]
         self.error_only = error_only
@@ -233,6 +235,8 @@ def build_executorch_binary(
         "SM8550": QcomChipset.SM8550,
         "SM8475": QcomChipset.SM8475,
         "SM8450": QcomChipset.SM8450,
+        "SC8280X": QcomChipset.SC8280X,
+        "SC8380XP": QcomChipset.SC8380XP,
     }
 
     backend_options = generate_htp_compiler_spec(

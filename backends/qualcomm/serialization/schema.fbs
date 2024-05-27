@@ -33,6 +33,8 @@ enum QcomChipset: int {
   SM8475 = 42,
   SM8550 = 43,
   SM8650 = 57,
+  SC8280X = 37,
+  SC8380XP = 60,
 }
 
 /// Indicate the information of the specified SoC.
