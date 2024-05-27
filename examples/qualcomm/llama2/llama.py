@@ -26,6 +26,7 @@ from executorch.examples.qualcomm.scripts.utils import (
 from sentencepiece import SentencePieceProcessor
 from torch.ao.quantization.observer import MinMaxObserver
 
+sys.setrecursionlimit(10000)
 
 def create_device_inputs(example_inputs):
     # TODO: support batch inputs if necessary
@@ -46,8 +47,8 @@ def create_device_inputs(example_inputs):
     return tuple(inputs), input_list
 
 
-def calibrate(example_inputs, module: torch.fx.GraphModule):
-    sp_model = SentencePieceProcessor(model_file="tokenizer.model")
+def calibrate(example_inputs, tokenizer_model: str, module: torch.fx.GraphModule):
+    sp_model = SentencePieceProcessor(model_file=tokenizer_model)
     _, _, atten_mask, k_caches, v_caches = example_inputs
 
     # TODO: change criteria & support batch inputs if necessary
@@ -75,14 +76,8 @@ def calibrate(example_inputs, module: torch.fx.GraphModule):
                 *k_caches,
                 *v_caches,
             )
-            k_caches = [
-                torch.cat([k_cache[:, 1:, :], new_k_caches[i]], dim=1)
-                for i, k_cache in enumerate(k_caches)
-            ]
-            v_caches = [
-                torch.cat([v_cache[:, 1:, :], new_v_caches[i]], dim=1)
-                for i, v_cache in enumerate(v_caches)
-            ]
+            k_caches = [torch.cat([k_cache[:, :, 1:], new_k_caches[i]], dim=-1) for i, k_cache in enumerate(k_caches)]
+            v_caches = [torch.cat([v_cache[:, 1:, :], new_v_caches[i]], dim=1) for i, v_cache in enumerate(v_caches)]
 
             pos += 1
             atten_mask[0][-pos - 1] = 0
@@ -186,8 +181,8 @@ if __name__ == "__main__":
     state_dict = torch.load(args.checkpoint)
     if "model" in state_dict:
         state_dict = state_dict["model"]
-    with torch.device("meta"):
-        instance = LlamaModel(config)
+    # with torch.device("meta"):
+    instance = LlamaModel(config)
     instance.load_state_dict(state_dict, strict=False, assign=True)
 
     inputs, input_list = create_device_inputs(instance.get_export_inputs())
@@ -219,7 +214,7 @@ if __name__ == "__main__":
             inputs,
             args.model,
             f"{args.artifact}/{pte_filename}",
-            partial(calibrate, instance.get_example_inputs()),
+            partial(calibrate, instance.get_example_inputs(), args.tokenizer_model),
             custom_annotations=(),
             quant_dtype=quant_dtype,
             per_channel_linear=True,
