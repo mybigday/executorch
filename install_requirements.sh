@@ -33,9 +33,12 @@ for arg in "$@"; do
     --pybind)
       EXECUTORCH_BUILD_PYBIND=ON
       ;;
-    coreml|mps|xnnpack)
+    coreml|mps|xnnpack|qnn)
       if [[ "$EXECUTORCH_BUILD_PYBIND" == "ON" ]]; then
         arg_upper="$(echo "${arg}" | tr '[:lower:]' '[:upper:]')"
+        if [ "$arg" == "qnn" ]; then
+          CMAKE_ARGS="$CMAKE_ARGS -DQNN_SDK_ROOT=$QNN_SDK_ROOT"
+        fi
         CMAKE_ARGS="$CMAKE_ARGS -DEXECUTORCH_BUILD_${arg_upper}=ON"
       else
         echo "Error: $arg must follow --pybind"
