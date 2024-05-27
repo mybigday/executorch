@@ -34,7 +34,7 @@ class QcomChipset(IntEnum):
     SM8475 = 42  # v69
     SM8550 = 43  # v73
     SM8650 = 57  # v75
-    SC8280XP = 37  # V68
+    SC8280X = 37  # V68
     SC8380XP = 60 # v73
 
 
@@ -49,7 +49,7 @@ _soc_info_table = {
     QcomChipset.SM8475: SocInfo(QcomChipset.SM8475, HtpInfo(HtpArch.V69, 8)),
     QcomChipset.SM8550: SocInfo(QcomChipset.SM8550, HtpInfo(HtpArch.V73, 8)),
     QcomChipset.SM8650: SocInfo(QcomChipset.SM8650, HtpInfo(HtpArch.V75, 8)),
-    QcomChipset.SC8280XP: SocInfo(QcomChipset.SC8280XP, HtpInfo(HtpArch.V68, 8)),
+    QcomChipset.SC8280X: SocInfo(QcomChipset.SC8280X, HtpInfo(HtpArch.V68, 8)),
     QcomChipset.SC8380XP: SocInfo(QcomChipset.SC8380XP, HtpInfo(HtpArch.V73, 8)),
 }
 
