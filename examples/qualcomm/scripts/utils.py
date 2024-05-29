@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Union
 
 from typing import Callable, List, Optional
 
@@ -25,6 +26,7 @@ from executorch.backends.qualcomm.quantizer.quantizer import (
 )
 from executorch.backends.qualcomm.serialization.qnn_compile_spec_schema import (
     QcomChipset,
+    _soc_info_table,
 )
 from executorch.backends.qualcomm.utils.utils import (
     capture_program,
@@ -42,17 +44,19 @@ from torch.ao.quantization.quantize_pt2e import convert_pt2e, prepare_pt2e
 class SimpleADB:
     def __init__(
         self,
-        qnn_sdk,
-        artifact_path,
-        pte_path,
-        workspace,
-        device_id,
-        soc_model,
-        host_id=None,
-        error_only=False,
-        shared_buffer=False,
-        runner="examples/qualcomm/qnn_executor_runner",
+        qnn_sdk: str,
+        artifact_path: str,
+        pte_path: Union[str, List[str]],
+        workspace: str,
+        device_id: str,
+        soc_model: Union[str, QcomChipset],
+        host_id: bool = None,
+        error_only: bool = False,
+        shared_buffer: bool = False,
+        runner: str = "examples/qualcomm/qnn_executor_runner",
     ):
+        if type(soc_model) is str:
+            soc_model = getattr(QcomChipset, soc_model)
         self.qnn_sdk = qnn_sdk
         self.artifact_path = artifact_path
         self.pte_path = pte_path if isinstance(pte_path, list) else [pte_path]
@@ -63,15 +67,7 @@ class SimpleADB:
         self.input_list_filename = "input_list.txt"
         self.etdump_path = f"{self.workspace}/etdump.etdp"
         self.output_folder = f"{self.workspace}/outputs"
-        arch_table = {
-            "SM8650": "75",
-            "SM8550": "73",
-            "SM8475": "69",
-            "SM8450": "69",
-            "SC8280X": "68",
-            "SC8380XP": "73",
-        }
-        self.soc_model = arch_table[soc_model]
+        self.htp_arch = _soc_info_table[soc_model].htp_info.htp_arch.value
         self.error_only = error_only
         self.shared_buffer = shared_buffer
         self.runner = runner
@@ -101,12 +97,12 @@ class SimpleADB:
         for artifact in [
             f"{self.qnn_sdk}/lib/aarch64-android/libQnnHtp.so",
             (
-                f"{self.qnn_sdk}/lib/hexagon-v{self.soc_model}/"
-                f"unsigned/libQnnHtpV{self.soc_model}Skel.so"
+                f"{self.qnn_sdk}/lib/hexagon-v{self.htp_arch}/"
+                f"unsigned/libQnnHtpV{self.htp_arch}Skel.so"
             ),
             (
                 f"{self.qnn_sdk}/lib/aarch64-android/"
-                f"libQnnHtpV{self.soc_model}Stub.so"
+                f"libQnnHtpV{self.htp_arch}Stub.so"
             ),
             f"{self.qnn_sdk}/lib/aarch64-android/libQnnHtpPrepare.so",
             f"{self.qnn_sdk}/lib/aarch64-android/libQnnSystem.so",
@@ -176,13 +172,12 @@ class SimpleADB:
         if callback:
             callback()
 
-
 # TODO: refactor to support different backends
 def build_executorch_binary(
     model,  # noqa: B006
     inputs,  # noqa: B006
-    soc_model,
-    file_name,
+    soc_model: Union[str, QcomChipset],
+    file_name: str,
     dataset: List[torch.Tensor] | Callable[[torch.fx.GraphModule], None],
     custom_annotations=(),
     skip_node_id_set=None,
@@ -194,6 +189,8 @@ def build_executorch_binary(
     metadata=None,
     act_observer=MovingAverageMinMaxObserver,
 ):
+    if type(soc_model) is str:
+        soc_model = getattr(QcomChipset, soc_model)
     if quant_dtype is not None:
         quantizer = QnnQuantizer()
         quantizer.add_custom_quant_annotations(custom_annotations)
@@ -230,21 +227,12 @@ def build_executorch_binary(
     else:
         edge_prog = capture_program(model, inputs)
 
-    arch_table = {
-        "SM8650": QcomChipset.SM8650,
-        "SM8550": QcomChipset.SM8550,
-        "SM8475": QcomChipset.SM8475,
-        "SM8450": QcomChipset.SM8450,
-        "SC8280X": QcomChipset.SC8280X,
-        "SC8380XP": QcomChipset.SC8380XP,
-    }
-
     backend_options = generate_htp_compiler_spec(
         use_fp16=False if quant_dtype else True
     )
     qnn_partitioner = QnnPartitioner(
         generate_qnn_executorch_compiler_spec(
-            soc_model=arch_table[soc_model],
+            soc_model=soc_model,
             backend_options=backend_options,
             debug=False,
             saver=False,
