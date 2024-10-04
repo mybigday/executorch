@@ -1,8 +1,8 @@
 .hypothesis
 buck-out/
-cmake-out/
-cmake-*-out/
-cmake-out-*/
+cmake-out*
+cmake-*-out
+.DS_Store
 ethos-u-scratch/
 executorch.egg-info
 pip-out/

@@ -322,6 +322,10 @@ class ComputeGraph final {
     return values_.at(idx).toConstTensor().packed_dim();
   }
 
+  inline int32_t concat_dim_of(const ValueRef idx) const {
+    return values_.at(idx).toConstTensor().concat_dim();
+  }
+
   inline vkapi::BufferBindInfo sizes_ubo(const ValueRef idx) {
     return values_.at(idx).toTensor().sizes_ubo();
   }
@@ -372,6 +376,19 @@ class ComputeGraph final {
 
   std::string extract_string(const ValueRef idx) {
     return values_.at(idx).toString();
+  }
+
+  template <
+      typename T,
+      typename std::enable_if<
+          std::is_integral<T>::value && std::is_signed<T>::value,
+          int>::type = 0>
+  T extract_whcn_dim(const ValueRef idx, const int64_t ndim) {
+    T dim = extract_scalar<T>(idx);
+    // Normalize dim to account for negative indexing
+    dim = (dim % ndim + ndim) % ndim;
+    // Assume original value is NCHW ordering, obtain the WHCN ordering
+    return ndim - 1 - dim;
   }
 
   //
@@ -535,6 +552,8 @@ class ComputeGraph final {
   vkapi::BufferBindInfo get_or_create_int_param_buffer(const ValueRef idx);
 
   void set_symint(const ValueRef idx, const int32_t val);
+
+  int32_t read_symint(const ValueRef idx);
 
   /*
    * Convenience function to add an input tensor along with its staging buffer

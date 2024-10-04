@@ -26,7 +26,7 @@ Since Llama 2 7B or Llama 3 8B model needs at least 4-bit quantization to fit ev
 
 For Llama 3.2 1B/3B, we validated the models by running them in their original bf16 datatype and unquantized on both Android and iOS phones. The 3B version required high-end phones with larger RAMs to fit the model.
 
-Additionally, these models are sensitive to accuracy when regular PTQ quantization is applied, so we employed [SpinQuant](https://github.com/facebookresearch/SpinQuant/tree/main) to achieve a good balance between accuracy and performance.
+Additionally, 1B/3B models are sensitive to accuracy loss when regular PTQ quantization is applied, so we employed 4bit quantization using [SpinQuant](https://github.com/facebookresearch/SpinQuant/tree/main) to achieve a good balance between accuracy, performance and memory.
 
 <table>
   <tr>
@@ -56,11 +56,23 @@ We evaluated WikiText perplexity using [LM Eval](https://github.com/EleutherAI/l
 
 Note that groupsize less than 128 was not enabled, since such models were still too large. This is because our current efforts have focused on enabling FP32 and support for FP16 is under way. What this implies for model size is that 1) embedding table is in FP32 and 2) quantized weights scales are FP32.
 
-### SpinQuant (Optional)
+### SpinQuant for Llama 3.2 1B/3B models (Optional)
 
 To improve accuracy, we can use [SpinQuant](https://github.com/facebookresearch/SpinQuant/tree/main), a post-training quantization (PTQ) technique that generates new quantized weights. In the standard PTQ process, quantization may lead to a decrease in accuracy when there are outliers. The SpinQuant method takes the original weights and produces optimized quantized weights with minimal outliers, resulting in higher accuracy. This can be achieved without any finetuning of the weights and only requires 100 iterations on a single A100 node.
 
-SpinQuant can generate quantized weights that are [compatible with ExecuTorch](https://github.com/facebookresearch/SpinQuant/tree/main?tab=readme-ov-file#3-export-to-executorch), specifically, it can be integrated with the existing optimized XNNPACK kernels (aka group-wise 4bit weight and 8bit dynamic activation). This allows developers to benefit from the higher accuracy of SpinQuant while also taking advantage of the strong performance of ExecuTorch acceleration. We are currently working on enabling SpinQuant for the Llama3.1 8B and Llama3.2 1B/3B models on ExecuTorch.
+SpinQuant can generate quantized weights that are [compatible with ExecuTorch](https://github.com/facebookresearch/SpinQuant/tree/main?tab=readme-ov-file#3-export-to-executorch), specifically, it can be integrated with the existing optimized XNNPACK kernels (e.g., group-wise 4bit weight and 8bit dynamic activation). This allows developers to benefit from the higher accuracy of SpinQuant while also taking advantage of the strong performance of ExecuTorch acceleration. We enabled SpinQuant for Llama3.2 1B/3B models on ExecuTorch.
+
+<p align="center">
+      <img src="./Android3_2_3B_SpinQuant.gif" width=300>
+      <br>
+      <em>
+      Running Llama3.2 3B on Android phone.
+      </em>
+      <br>
+      <em>
+      4bit quantization using SpinQuant
+      </em>
+</p>
 
 ## Enablement
 
@@ -69,6 +81,16 @@ For Llama 3 8B and Llama3.1 8B, we have verified so far on iPhone 15 Pro, iPhone
 We have verified running Llama 2 7B [mobile applications](#step-6-build-mobile-apps) efficiently on select devices including the iPhone 15 Pro, iPhone 15 Pro Max, Samsung Galaxy S22 and S24, and OnePlus 12.
 
 ## Performance
+
+### Llama 3.2 1B and 3B
+Llama 3.2 1B and 3B performance was measured on the OnePlus 12 device. The performance measurement is expressed in terms of tokens per second using an [adb binary-based approach](#step-5-run-benchmark-on) for generating 128 tokens.
+
+|Model  | 4bit(*) via SpinQuant
+|--------| ---------------
+|1B  | 53.41 tokens/second |
+|3B | 22.98 tokens/second |
+
+(*) With SpinQuant, we currently quantize 4-bit groupwise (with groupsize 32) weight, 8bit dynamic activation of all the linear layers of the model, except embedding and output layers. The embedding and output layers are quantized as 8-bit per-channel weight and 8-bit dynamic activation.
 
 ### Llama3 8B and Llama3.1 8B
 Llama 3 8B performance was measured on the Samsung Galaxy S22, S24, and OnePlus 12 devices. The performance measurement is expressed in terms of tokens per second using an [adb binary-based approach](#step-5-run-benchmark-on).
@@ -126,7 +148,7 @@ python -m examples.models.llama2.export_llama \
   --output_name="llama3_2.pte"
 ```
 
-Optionally, we can apply SpinQuant to quantize the model without sacrifacing too much accuracy loss. With SpinQuant, we currently support 8-bit per-channel groupwise quantization for embeddings, 8-bit per-channel groupwise weight and 8-bit dynamic activation for the last output layer, 4-bit groupwise with group size 32 weight and 8-bit dynamic activation for other linear layers.
+Optionally, we can apply SpinQuant to quantize the model without sacrifacing too much accuracy loss.
 
 To use SpinQuant, follow its [instruction](https://github.com/facebookresearch/SpinQuant/tree/main?tab=readme-ov-file#3-export-to-executorch) for exporting checkpoint to ExecuTorch and then export the SpinQuant checkpoint.
 
@@ -140,13 +162,13 @@ python -m examples.models.llama2.export_llama \
    --params "${LLAMA_PARAMS:?}" \
    --use_sdpa_with_kv_cache \
    -X \
-   --spin_qmode 8da4w_output_8da8w \
-   --spin_group_size 32 \
+   --preq_mode 8da4w_output_8da8w \
+   --preq_group_size 32 \
    --max_seq_length 2048 \
    --output_name "llama3_2.pte" \
    -kv \
    -d fp32 \
-   --spin_embedding_quantize 8,0 \
+   --preq_embedding_quantize 8,0 \
    --use_spin_quant native \
    --metadata '{"append_eos_to_prompt": 0, "get_bos_id":128000, "get_eos_ids":[128009, 128001], "get_n_bos": 0, "get_n_eos": 0}'
 ```
@@ -163,8 +185,6 @@ You can export and run the original Llama 3 8B instruct model.
     ```
 
     Due to the larger vocabulary size of Llama 3, we recommend quantizing the embeddings with `--embedding-quantize 4,32` as shown above to further reduce the model size.
-
-3. SpinQuant [Optional]. If you want to improve accuracy, you can use [SpinQuant](https://github.com/facebookresearch/SpinQuant). Namely, (1) you can generate a new checkpoint via `31_optimize_rotation_executorch.sh` and `32_eval_ptq_executorch.sh` commands in [SpinQuant repo](https://github.com/facebookresearch/SpinQuant/tree/main?tab=readme-ov-file#3-export-to-executorch) (2) pass in an extra `--use_spin_quant native` argument in `export_llama` script above.
 
 ### Option C: Download and export stories110M model
 
@@ -312,6 +332,8 @@ Note for Mac users: There's a known linking issue with Xcode 15.1. Refer to the 
 
 For Llama2 and stories models, pass the converted `tokenizer.bin` file instead of `tokenizer.model`.
 
+To build for CoreML backend and validate on Mac, replace `-DEXECUTORCH_BUILD_XNNPACK=ON` with `-DEXECUTORCH_BUILD_COREML=ON`
+
 ## Step 5: Run benchmark on Android phone
 
 **1. Build llama runner binary for Android**
@@ -397,6 +419,10 @@ for each backend ([CoreML](https://pytorch.org/executorch/main/build-run-coreml.
 - QNN: `python -m examples.models.llama2.export_llama -kv --disable_dynamic_shape --qnn -c stories110M.pt -p params.json `
 
 The iOS LLAMA app supports the CoreML and MPS model and the Android LLAMA app supports the QNN model. On Android, it also allow to cross compiler the llama runner binary, push to the device and run.
+
+For CoreML, there are 2 additional optional arguments:
+* `--coreml-ios`: Specify the minimum iOS version to deploy (and turn on available optimizations). E.g. `--coreml-ios 18` will turn on [in-place KV cache](https://developer.apple.com/documentation/coreml/mlstate?language=objc) and [fused scaled dot product attention kernel](https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS18.transformers.scaled_dot_product_attention) (the resulting model will then need at least iOS 18 to run, though)
+* `--coreml-quantize`: Use [quantization tailored for CoreML](https://apple.github.io/coremltools/docs-guides/source/opt-quantization-overview.html). E.g. `--coreml-quantize b4w` will perform per-block 4-bit weight-only quantization in a way tailored for CoreML
 
 # What is coming next?
 ## Quantization

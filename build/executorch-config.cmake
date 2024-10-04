@@ -17,7 +17,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 set(_root "${CMAKE_CURRENT_LIST_DIR}/../..")
-set(required_lib_list executorch executorch_no_prim_ops portable_kernels)
+set(required_lib_list executorch executorch_core portable_kernels)
 foreach(lib ${required_lib_list})
   set(lib_var "LIB_${lib}")
   add_library(${lib} STATIC IMPORTED)
@@ -30,7 +30,7 @@ foreach(lib ${required_lib_list})
   target_include_directories(${lib} INTERFACE ${_root})
 endforeach()
 
-target_link_libraries(executorch INTERFACE executorch_no_prim_ops)
+target_link_libraries(executorch INTERFACE executorch_core)
 
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
   set(FLATCCRT_LIB flatccrt_d)
@@ -54,7 +54,11 @@ set(lib_list
     extension_threadpool
     extension_training
     xnnpack_backend
+    # Start XNNPACK Lib Deps
     XNNPACK
+    microkernels-prod
+    kleidiai
+    # End XNNPACK Lib Deps
     cpuinfo
     pthreadpool
     vulkan_backend
